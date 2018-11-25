@@ -1,3 +1,23 @@
+"""
+C:\Users\Administrator\Downloads\ico1106\core\cpuset>python Main.py --help
+usage: Main.py [-h] [--verbose] [--config CONFIG] [--online ONLINE]
+
+Used to set cpu online/offline, set the freq limit of the cores
+
+optional arguments:
+  -h, --help            show this help message and exit
+  --verbose, -v         verbose mode
+  --config CONFIG, -c CONFIG
+                        the cpu config which input to the script, the format
+                        is core online/offline min_freq/max_freq
+  --online ONLINE, -o ONLINE
+                        input the list of cpus that need online, format is
+                        "0_1_2_3_4"
+
+python Main.py --config="0_1_1000000_1200000 2_1_1000000_1800000"
+python Main.py --online="0_1_2_3"
+"""
+
 import sys
 sys.path.append('..')
 from myutils.mylog import mylog
@@ -12,22 +32,9 @@ def get_package_info(adb):
         path = adb.shell_command("pm path {}".format(app.split(':')[1]))
         print ("{}: {}".format(app,path))
 
-"""
-/sys/devices/system/cpu/cpu0/cpufreq/cpuinfo_cur_freq
-/sys/devices/system/cpu/cpu0/cpufreq/cpuinfo_max_freq
-/sys/devices/system/cpu/cpu0/cpufreq/cpuinfo_min_freq
-/sys/devices/system/cpu/cpu0/cpufreq/scaling_available_frequencies
-/sys/devices/system/cpu/cpu0/cpufreq/scaling_available_governors
-/sys/devices/system/cpu/cpu0/cpufreq/scaling_boost_frequencies
-/sys/devices/system/cpu/cpu0/cpufreq/scaling_cur_freq
-/sys/devices/system/cpu/cpu0/cpufreq/scaling_driver
-/sys/devices/system/cpu/cpu0/cpufreq/scaling_governor
-/sys/devices/system/cpu/cpu0/cpufreq/scaling_max_freq
-/sys/devices/system/cpu/cpu0/cpufreq/scaling_min_freq
-/sys/devices/system/cpu/cpu0/cpufreq/scaling_setspeed
-/sys/devices/system/cpu/cpu0/cpufreq/schedutil
-/sys/devices/system/cpu/cpu0/cpufreq/stats
-"""
+def cpu_get_max_cpu_cores():
+    cores = adb.shell_command("cat /sys/devices/system/cpu/kernel_max")
+    return int(cores[0])
 
 def cpu_get_freq_limit(cpu):
     min = adb.shell_command("cat /sys/devices/system/cpu/cpu%d/cpufreq/scaling_min_freq" % cpu)
@@ -127,20 +134,92 @@ def cpu_hotplug(cpu, online):
         log.i("wrong parameters, need 0 or 1, but the value is %d" % online)
     adb.shell_command("echo %d > /sys/devices/system/cpu/cpu%d/online" % (online, cpu))
 
+def cpu_set_config(configs):
+    for config in configs:
+        cpu = config[0]
+        online = config[1]
+        min = config[2]
+        max = config[3]
+        cpu_hotplug(cpu, online)
+        cpu_set_freq_limit(cpu, min, max)
+
+def cpu_set_online(online_cpus):
+    cores = cpu_get_max_cpu_cores()
+    for i in range(0, cores+1):
+        if i in online_cpus:
+            cpu_hotplug(i, 1)
+        else:
+            cpu_hotplug(i, 0)
+
+# core online/offline min_freq/max_freq
+# 0_1_0_0 4_1_1000000_1500000
+def parse_config_args(s):
+    print s
+    ret = []
+    v = s.split(" ")
+    for v1 in v:
+        temp_val = v1.split('_')
+        if len(temp_val) != 4:
+            log.e("cpuset config paramters %s != 4" % v1)
+            exit(-1)
+        l = []
+
+        for v2 in temp_val:
+            l.append(int(v2))
+
+        ret.append(l)
+    return ret
+
+# core online/offline min_freq/max_freq
+# 0_1_2_3
+def parse_onine_args(s):
+    ret = []
+    v = s.split("_")
+    for v1 in v:
+        ret.append(int(v1))
+
+    return ret
+
+def test():
+    cpu_hotplug(7, 1)
+    cpu_hotplug(6, 1)
+    cpu_hotplug(5, 1)
+    cpu_hotplug(4, 1)
+    cpu_hotplug(3, 1)
+    cpu_hotplug(2, 1)
+    cpu_hotplug(1, 1)
+    cpu_hotplug(0, 1)
+    cpu_set_freq_limit(4, 800000, 800000)
+    cpu_set_freq_limit(0, 2000000, 2000000)
+
 def main():
-    log = mylog(level="info")
-    # creates the ADB object
+    import argparse
+
+    # description: descript the usage of the script
+    parser = argparse.ArgumentParser(description="Used to set cpu online/offline, set the freq limit of the cores")
+    # action: means when the arg is set, the value set to True. eg args.verbose=True
+    parser.add_argument('--verbose', '-v', action='store_true', help='verbose mode')
+    parser.add_argument('--config', '-c', type=parse_config_args,
+                        help='the cpu config which input to the script, the format is core online/offline min_freq/max_freq')
+    parser.add_argument('--online', '-o', type=parse_onine_args,
+                        help='input the list of cpus that need online, format is \"0_1_2_3_4\"')
+
+    args = parser.parse_args()
+    if args.verbose:
+        log.i("Verbose mode on!")
+    else:
+        log.i("Verbose mode off!")
+
+    log.i("waiting for adb connect...")
     adb.wait_for_device()
     log.i("adb is ready!")
 
-    cpu_hotplug(7,0)
-    cpu_hotplug(6,0)
-    cpu_hotplug(5,0)
-    cpu_hotplug(3,0)
-    cpu_hotplug(2,0)
-    cpu_hotplug(1,0)
-    cpu_set_freq_limit(4, 800000, 800000)
-    cpu_set_freq_limit(0, 2000000, 2000000)
+    if args.config is not None:
+        print "args.config : ", args.config
+        cpu_set_config(args.config)
+    if args.online is not None:
+        print "args.online : ", args.online
+        cpu_set_online(args.online)
 
 if __name__ == "__main__":
     main()

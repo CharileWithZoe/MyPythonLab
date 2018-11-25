@@ -30,17 +30,17 @@ class mylog:
         else:
             logging.basicConfig(filename=filename, level=l, format=LOG_FORMAT, datefmt=DATE_FORMAT)
 
-    def d(self, str):
-        logging.debug(str)
+    def d(self, msg):
+        logging.debug(msg)
 
-    def i(self, str):
-        logging.info(str)
+    def i(self, msg):
+        logging.info(msg)
 
-    def w(self, str):
-        logging.warning(str)
+    def w(self, msg):
+        logging.warning(msg)
 
-    def e(self, str):
-        logging.error(str)
+    def e(self, msg):
+        logging.error(msg)
 
 if __name__ == '__main__':
     log = mylog(level="debug")
